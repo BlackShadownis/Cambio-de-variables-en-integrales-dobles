@@ -50,11 +50,12 @@ Un software educativo interactivo para visualizar y comprender integrales dobles
 
 ## 📸 Capturas de Pantalla
 
-<div>`<p>``<i>`Aquí irían capturas de pantalla de la aplicación. Reemplaza estos placeholders con imágenes reales.`</i>``</p>`
 
 
 
 
+
+![Captura de pantalla 2025-05-08 210828](https://github.com/user-attachments/assets/5791477d-3fad-4777-887e-8502ae7dce55)
 
 
 
