@@ -16,6 +16,8 @@ from gui.tabs.custom_integral_tab import CustomIntegralTab
 from gui.tabs.areas_volumes_tab import AreasVolumesTab
 from gui.tabs.moments_tab import MomentsTab
 from gui.tabs.average_values_tab import AverageValuesTab
+from gui.tabs.animation_tab import AnimationTab
+from gui.tabs.integration_steps_tab import IntegrationStepsTab
 
 class IntegralesApp:
     """Clase principal de la aplicación de integrales dobles"""
@@ -35,6 +37,8 @@ class IntegralesApp:
         self.moments_tab = MomentsTab(self.notebook)
         self.average_values_tab = AverageValuesTab(self.notebook)
         self.custom_integral_tab = CustomIntegralTab(self.notebook)
+        self.animation_tab = AnimationTab(self.notebook)
+        self.integration_steps_tab = IntegrationStepsTab(self.notebook)
         
         # Configurar estilo
         self.configure_style()
