@@ -22,7 +22,7 @@ Un software educativo interactivo para visualizar y comprender integrales dobles
 - [Capturas de Pantalla]
 - [Requisitos]
 - [Instalación]
-- [Uso](#uso)
+- [Uso]
 - [Estructura del Proyecto]
 - [Documentación Técnica]
 - [Contribuir]
