@@ -18,17 +18,17 @@ Un software educativo interactivo para visualizar y comprender integrales dobles
 
 ## 📋 Contenido
 
-- [Características](#características)
-- [Capturas de Pantalla](#capturas-de-pantalla)
-- [Requisitos](#requisitos)
-- [Instalación](#instalación)
+- [Características]
+- [Capturas de Pantalla]
+- [Requisitos]
+- [Instalación]
 - [Uso](#uso)
-- [Estructura del Proyecto](#estructura-del-proyecto)
-- [Documentación Técnica](#documentación-técnica)
-- [Contribuir](#contribuir)
-- [Preguntas Frecuentes](#preguntas-frecuentes)
-- [Licencia](#licencia)
-- [Contacto](#contacto)
+- [Estructura del Proyecto]
+- [Documentación Técnica]
+- [Contribuir]
+- [Preguntas Frecuentes]
+- [Licencia]
+- [Contacto]
 
 
 ## ✨ Características
@@ -95,7 +95,7 @@ pip install -r requirements.txt
 
 ### Descarga directa
 
-1. Descarga el [archivo ZIP](https://github.com/tu-usuario/integrales-dobles/archive/refs/heads/main.zip)
+1. Descarga el [archivo ZIP]
 2. Extrae el contenido
 3. Abre una terminal en la carpeta extraída
 4. Instala las dependencias:
