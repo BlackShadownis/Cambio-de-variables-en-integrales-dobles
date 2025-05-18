@@ -101,7 +101,7 @@ class CreditsTab:
         department_label.pack()
         
         year_label = ttk.Label(institution_frame, 
-                             text="2023", 
+                             text="2025", 
                              font=("Arial", 11))
         year_label.pack(pady=5)
         
