@@ -37,7 +37,7 @@ class AreasVolumesTab:
         ttk.Label(controls_frame, text="Seleccione un ejemplo:").grid(row=0, column=0, padx=5, pady=5, sticky=tk.W)
         self.example_var = tk.StringVar(value="cardioide")
         examples = ttk.Combobox(controls_frame, textvariable=self.example_var, 
-                              values=["cardioide", "paraboloide"])
+                              values=["cardioide", "semiesfera"])
         examples.grid(row=0, column=1, padx=5, pady=5, sticky=tk.W)
         examples.bind("<<ComboboxSelected>>", self.update_example)
         
@@ -46,7 +46,8 @@ class AreasVolumesTab:
         params_frame.grid(row=1, column=0, columnspan=2, padx=5, pady=5, sticky=tk.W+tk.E+tk.N+tk.S)
         
         # Parámetro a
-        ttk.Label(params_frame, text="Parámetro a:").grid(row=0, column=0, padx=5, pady=5, sticky=tk.W)
+        self.param_label = ttk.Label(params_frame, text="Parámetro a:")
+        self.param_label.grid(row=0, column=0, padx=5, pady=5, sticky=tk.W)
         self.param_a = ttk.Scale(params_frame, from_=0.5, to=3.0, orient=tk.HORIZONTAL, length=200)
         self.param_a.grid(row=0, column=1, padx=5, pady=5, sticky=tk.W+tk.E)
         self.param_a.set(2.0)
@@ -96,6 +97,12 @@ class AreasVolumesTab:
     
     def update_example(self, event=None):
         """Actualiza el ejemplo seleccionado"""
+        # Actualizar la etiqueta del parámetro según el ejemplo
+        example = self.example_var.get()
+        if example == "cardioide":
+            self.param_label.config(text="Parámetro a:")
+        elif example == "semiesfera":
+            self.param_label.config(text="Radio R:")
         self.calculate_example()
     
     def calculate_example(self):
@@ -133,39 +140,46 @@ class AreasVolumesTab:
                 result_text += f"Área simbólica: No disponible\n"
             result_text += f"Fórmula exacta: 6πa² = {6*np.pi*a**2:.6f}"
             
-        elif example == "paraboloide":
-            # Definimos la función a integrar
+        elif example == "semiesfera":
+            # Radio de la semiesfera
+            R = a  # Usar el parámetro a como radio
+            
+            # Definimos la función a integrar (altura de la semiesfera)
             def f_cartesiana(x, y):
-                return 4 - x**2 - y**2
+                return np.sqrt(R**2 - x**2 - y**2)
             
             # En coordenadas polares
             def f_polar(r, theta):
                 # x = r*cos(theta), y = r*sin(theta)
                 # x² + y² = r²
-                return (4 - r**2) * r  # Multiplicamos por r (jacobiano)
+                return np.sqrt(R**2 - r**2) * r  # Multiplicamos por r (jacobiano)
             
             # Integración numérica
             volumen, error = integrate.dblquad(
                 f_polar,
                 0, 2*np.pi,  # límites de theta
-                lambda theta: 0, lambda theta: 1  # límites de r (círculo de radio 1)
+                lambda theta: 0, lambda theta: R  # límites de r (círculo de radio R)
             )
             
             # Cálculo simbólico
             r, theta = sp.symbols('r theta')
-            f_sym = (4 - r**2) * r
-            vol_simbolico = sp.integrate(f_sym, (r, 0, 1))
+            f_sym = sp.sqrt(R**2 - r**2) * r
+            vol_simbolico = sp.integrate(f_sym, (r, 0, R))
             vol_simbolico = sp.integrate(vol_simbolico, (theta, 0, 2*sp.pi))
             
+            # Valor teórico exacto
+            teorico = (2/3) * np.pi * R**3
+            
             # Mostrar resultados
-            result_text = f"Volumen bajo z = 4 - x² - y²\n"
-            result_text += f"sobre un círculo de radio 1\n\n"
+            result_text = f"Volumen de una semiesfera\n"
+            result_text += f"z = √(R² - x² - y²) con R = {R}\n\n"
             result_text += f"Volumen numérico: {volumen:.6f}\n"
             if vol_simbolico is not None:
                 result_text += f"Volumen simbólico: {float(vol_simbolico):.6f}\n"
             else:
                 result_text += f"Volumen simbólico: No disponible\n"
-            result_text += f"Fórmula exacta: 2π = {2*np.pi:.6f}"
+            result_text += f"Fórmula exacta: (2/3)πR³ = {teorico:.6f}\n"
+            result_text += f"Error relativo: {abs(volumen-teorico)/teorico*100:.8f}%"
         
         # Actualizar la etiqueta de resultados
         self.result_label.config(text=result_text)
@@ -211,18 +225,18 @@ class AreasVolumesTab:
             ax.set_ylabel('y')
             ax.set_title(f"Cardioide: r = {a:.1f}(1 + cos(θ))")
             
-        elif example == "paraboloide":
-            # Dibujar un círculo de radio 1
-            circle = plt.Circle((0, 0), 1, fill=True, alpha=0.3)
+        elif example == "semiesfera":
+            # Dibujar un círculo con radio variable
+            circle = plt.Circle((0, 0), a, fill=True, alpha=0.3)
             ax.add_patch(circle)
             
             # Configurar los ejes
-            ax.set_xlim(-1.5, 1.5)
-            ax.set_ylim(-1.5, 1.5)
+            ax.set_xlim(-a*1.5, a*1.5)
+            ax.set_ylim(-a*1.5, a*1.5)
             ax.grid(True)
             ax.set_xlabel('x')
             ax.set_ylabel('y')
-            ax.set_title("Región: círculo de radio 1")
+            ax.set_title(f"Región: círculo de radio {a:.1f} (base de la semiesfera)")
         
         # Ajustar la figura
         fig.tight_layout()
@@ -280,27 +294,36 @@ class AreasVolumesTab:
             ax.set_zlabel('z')
             ax.set_title(f"Superficie z = 1 sobre cardioide")
             
-        elif example == "paraboloide":
+        elif example == "semiesfera":
+            # Radio de la semiesfera
+            R = a  # Usar el parámetro a como radio
+            
             # Crear una malla de puntos
-            r = np.linspace(0, 1, 50)
-            theta = np.linspace(0, 2*np.pi, 50)
-            r, theta = np.meshgrid(r, theta)
+            u = np.linspace(0, np.pi/2, 50)  # Solo la mitad superior
+            v = np.linspace(0, 2*np.pi, 50)
             
-            # Convertir a coordenadas cartesianas
-            x = r * np.cos(theta)
-            y = r * np.sin(theta)
-            
-            # Calcular z
-            z = 4 - x**2 - y**2
+            # Coordenadas esféricas a cartesianas
+            x = R * np.outer(np.sin(u), np.cos(v))
+            y = R * np.outer(np.sin(u), np.sin(v))
+            z = R * np.outer(np.cos(u), np.ones_like(v))
             
             # Dibujar la superficie
             surf = ax.plot_surface(x, y, z, cmap=cm.coolwarm, alpha=0.8)
+            
+            # Dibujar el círculo base
+            theta_circle = np.linspace(0, 2*np.pi, 100)
+            x_circle = R * np.cos(theta_circle)
+            y_circle = R * np.sin(theta_circle)
+            z_circle = np.zeros_like(theta_circle)
+            ax.plot(x_circle, y_circle, z_circle, 'k-', linewidth=2)
             
             # Configurar los ejes
             ax.set_xlabel('x')
             ax.set_ylabel('y')
             ax.set_zlabel('z')
-            ax.set_title('Superficie z = 4 - x² - y²')
+            ax.set_title('Semiesfera z = √(R² - x² - y²)')
+            ax.set_zlim(0, R)
+            ax.set_box_aspect([1, 1, 0.5])  # Ajustar la proporción de los ejes
         
         # Ajustar la figura
         fig.tight_layout()
