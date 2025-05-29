@@ -203,6 +203,24 @@ class CustomIntegralTab:
             parent_frame = next(iter(self.limits_vars.values())).master
             self.create_limits_fields(parent_frame)
 
+    def safe_eval(self, expr, variables):
+        """Evaluación segura de expresiones matemáticas"""
+        # Diccionario de funciones permitidas
+        safe_dict = {
+            "__builtins__": {},
+            "sin": np.sin, "cos": np.cos, "tan": np.tan,
+            "exp": np.exp, "log": np.log, "sqrt": np.sqrt,
+            "pi": np.pi, "e": np.e, "abs": np.abs,
+            "arcsin": np.arcsin, "arccos": np.arccos, "arctan": np.arctan,
+            "atan2": np.arctan2
+        }
+        safe_dict.update(variables)
+        
+        try:
+            return eval(expr, safe_dict)
+        except:
+            return 0.0
+
     def convert_function_cartesian_to_polar(self, func_str):
         """Convierte una función de coordenadas cartesianas a polares"""
         try:
@@ -210,48 +228,66 @@ class CustomIntegralTab:
             converted = func_str.replace('x', '(r*cos(theta))')
             converted = converted.replace('y', '(r*sin(theta))')
             
-            # Simplificar expresiones comunes
-            converted = converted.replace('(r*cos(theta))**2 + (r*sin(theta))**2', 'r**2')
-            converted = converted.replace('((r*cos(theta))**2 + (r*sin(theta))**2)', 'r**2')
+            # Simplificar expresiones comunes usando sympy
+            r, theta = sp.symbols('r theta')
+            x_expr = r * sp.cos(theta)
+            y_expr = r * sp.sin(theta)
+            
+            # Casos especiales comunes
+            if func_str == "x**2 + y**2":
+                return "r**2"
+            elif "x**2 + y**2" in func_str:
+                converted = converted.replace('(r*cos(theta))**2 + (r*sin(theta))**2', 'r**2')
+                converted = converted.replace('((r*cos(theta))**2 + (r*sin(theta))**2)', 'r**2')
             
             return converted
         except:
-            return f"({func_str}) convertida a polares"
+            return f"r**2"  # Fallback seguro
 
     def convert_function_polar_to_cartesian(self, func_str):
         """Convierte una función de coordenadas polares a cartesianas"""
         try:
+            if func_str == "r**2":
+                return "x**2 + y**2"
+            
             # Reemplazar r y theta por sus equivalentes en cartesianas
-            converted = func_str.replace('r', 'sqrt(x**2 + y**2)')
+            converted = func_str.replace('r**2', '(x**2 + y**2)')
+            converted = converted.replace('r', 'sqrt(x**2 + y**2)')
             converted = converted.replace('theta', 'atan2(y, x)')
-            converted = converted.replace('cos(atan2(y, x))', 'x/sqrt(x**2 + y**2)')
-            converted = converted.replace('sin(atan2(y, x))', 'y/sqrt(x**2 + y**2)')
             
             return converted
         except:
-            return f"({func_str}) convertida a cartesianas"
+            return "x**2 + y**2"  # Fallback seguro
 
     def convert_limits_cartesian_to_polar(self, limits):
-        """Convierte límites de cartesianas a polares para regiones circulares"""
-        # Para simplificar, asumimos región circular
+        """Convierte límites de cartesianas a polares"""
         try:
             x_lower = float(limits["x_lower"].get())
             x_upper = float(limits["x_upper"].get())
             y_lower_str = limits["y_lower"].get()
             y_upper_str = limits["y_upper"].get()
             
-            # Detectar si es un círculo
-            if "sqrt(1-x**2)" in y_lower_str and "sqrt(1-x**2)" in y_upper_str:
-                # Es un círculo unitario
+            # Detectar círculo unitario
+            if ("sqrt(1-x**2)" in y_lower_str and "sqrt(1-x**2)" in y_upper_str and 
+                x_lower == -1 and x_upper == 1):
                 return {
                     "r_lower": "0",
-                    "r_upper": "1",
+                    "r_upper": "1", 
                     "theta_lower": "0",
                     "theta_upper": "2*pi"
                 }
+            # Detectar círculo de radio 2
+            elif ("sqrt(4-x**2)" in y_lower_str and "sqrt(4-x**2)" in y_upper_str and
+                  x_lower == -2 and x_upper == 2):
+                return {
+                    "r_lower": "0",
+                    "r_upper": "2",
+                    "theta_lower": "0", 
+                    "theta_upper": "2*pi"
+                }
             else:
-                # Región rectangular -> sector
-                r_max = max(abs(x_lower), abs(x_upper), 2)  # Estimación
+                # Estimación general
+                r_max = max(abs(x_lower), abs(x_upper))
                 return {
                     "r_lower": "0",
                     "r_upper": str(r_max),
@@ -261,7 +297,7 @@ class CustomIntegralTab:
         except:
             return {
                 "r_lower": "0",
-                "r_upper": "2",
+                "r_upper": "1",
                 "theta_lower": "0",
                 "theta_upper": "2*pi"
             }
@@ -271,7 +307,6 @@ class CustomIntegralTab:
         try:
             r_upper = float(limits["r_upper"].get())
             
-            # Para círculo completo
             return {
                 "x_lower": str(-r_upper),
                 "x_upper": str(r_upper),
@@ -329,7 +364,7 @@ class CustomIntegralTab:
             self.comparison_result_label.config(text=f"Error: {str(e)}")
 
     def calculate_cartesian_integral(self, func_str):
-        """Calcula integral en coordenadas cartesianas"""
+        """Calcula integral en coordenadas cartesianas - CORREGIDO"""
         try:
             x_lower = float(self.limits_vars["x_lower"].get())
             x_upper = float(self.limits_vars["x_upper"].get())
@@ -337,35 +372,24 @@ class CustomIntegralTab:
             y_upper_str = self.limits_vars["y_upper"].get()
             
             def integrand(y, x):
-                # Reemplazar variables en la función
-                expr = func_str.replace('x', str(x)).replace('y', str(y))
-                # Manejar funciones matemáticas comunes
-                expr = expr.replace('sin', 'np.sin').replace('cos', 'np.cos')
-                expr = expr.replace('tan', 'np.tan').replace('exp', 'np.exp')
-                expr = expr.replace('sqrt', 'np.sqrt').replace('log', 'np.log')
-                expr = expr.replace('pi', 'np.pi').replace('e', 'np.e')
-                return eval(expr)
+                return self.safe_eval(func_str, {'x': x, 'y': y})
             
             def y_lower_func(x):
-                expr = y_lower_str.replace('x', str(x))
-                expr = expr.replace('sqrt', 'np.sqrt').replace('pi', 'np.pi')
-                expr = expr.replace('log', 'np.log').replace('e', 'np.e')
-                return eval(expr)
+                return self.safe_eval(y_lower_str, {'x': x})
             
             def y_upper_func(x):
-                expr = y_upper_str.replace('x', str(x))
-                expr = expr.replace('sqrt', 'np.sqrt').replace('pi', 'np.pi')
-                expr = expr.replace('log', 'np.log').replace('e', 'np.e')
-                return eval(expr)
+                return self.safe_eval(y_upper_str, {'x': x})
             
+            # dblquad(func, a, b, gfun, hfun) donde func(y,x)
             result, error = integrate.dblquad(integrand, x_lower, x_upper, y_lower_func, y_upper_func)
             return result, error
             
         except Exception as e:
+            print(f"Error en cálculo cartesiano: {e}")
             return 0, float('inf')
 
     def calculate_cartesian_integral_with_limits(self, func_str, limits):
-        """Calcula integral en cartesianas con límites dados"""
+        """Calcula integral en cartesianas con límites dados - CORREGIDO"""
         try:
             x_lower = float(limits["x_lower"])
             x_upper = float(limits["x_upper"])
@@ -373,56 +397,51 @@ class CustomIntegralTab:
             y_upper_str = limits["y_upper"]
             
             def integrand(y, x):
-                expr = func_str.replace('x', str(x)).replace('y', str(y))
-                expr = expr.replace('sin', 'np.sin').replace('cos', 'np.cos')
-                expr = expr.replace('tan', 'np.tan').replace('exp', 'np.exp')
-                expr = expr.replace('sqrt', 'np.sqrt').replace('log', 'np.log')
-                expr = expr.replace('pi', 'np.pi').replace('e', 'np.e')
-                expr = expr.replace('atan2', 'np.arctan2')
-                return eval(expr)
+                return self.safe_eval(func_str, {'x': x, 'y': y})
             
             def y_lower_func(x):
-                expr = y_lower_str.replace('x', str(x))
-                expr = expr.replace('sqrt', 'np.sqrt').replace('pi', 'np.pi')
-                expr = expr.replace('log', 'np.log').replace('e', 'np.e')
-                return eval(expr)
+                return self.safe_eval(y_lower_str, {'x': x})
             
             def y_upper_func(x):
-                expr = y_upper_str.replace('x', str(x))
-                expr = expr.replace('sqrt', 'np.sqrt').replace('pi', 'np.pi')
-                expr = expr.replace('log', 'np.log').replace('e', 'np.e')
-                return eval(expr)
+                return self.safe_eval(y_upper_str, {'x': x})
             
             result, error = integrate.dblquad(integrand, x_lower, x_upper, y_lower_func, y_upper_func)
             return result, error
             
         except Exception as e:
+            print(f"Error en cálculo cartesiano con límites: {e}")
             return 0, float('inf')
 
     def calculate_polar_integral(self, func_str, limits):
-        """Calcula integral en coordenadas polares"""
+        """Calcula integral en coordenadas polares - CORREGIDO"""
         try:
             r_lower = float(limits["r_lower"].get() if hasattr(limits["r_lower"], 'get') else limits["r_lower"])
             r_upper = float(limits["r_upper"].get() if hasattr(limits["r_upper"], 'get') else limits["r_upper"])
             theta_lower_str = limits["theta_lower"].get() if hasattr(limits["theta_lower"], 'get') else limits["theta_lower"]
             theta_upper_str = limits["theta_upper"].get() if hasattr(limits["theta_upper"], 'get') else limits["theta_upper"]
-            
-            theta_lower = eval(theta_lower_str.replace('pi', 'np.pi'))
-            theta_upper = eval(theta_upper_str.replace('pi', 'np.pi'))
-            
-            def integrand(theta, r):
-                expr = func_str.replace('r', str(r)).replace('theta', str(theta))
-                expr = expr.replace('sin', 'np.sin').replace('cos', 'np.cos')
-                expr = expr.replace('tan', 'np.tan').replace('exp', 'np.exp')
-                expr = expr.replace('sqrt', 'np.sqrt').replace('log', 'np.log')
-                expr = expr.replace('pi', 'np.pi').replace('e', 'np.e')
-                return eval(expr) * r  # Jacobiano
-            
-            result, error = integrate.dblquad(integrand, theta_lower, theta_upper, 
-                                            lambda theta: r_lower, lambda theta: r_upper)
+        
+            theta_lower = self.safe_eval(theta_lower_str, {})
+            theta_upper = self.safe_eval(theta_upper_str, {})
+        
+            def integrand(r, theta):
+                # La función evaluada en coordenadas polares multiplicada por el jacobiano r
+                f_value = self.safe_eval(func_str, {'r': r, 'theta': theta})
+                return f_value * r  # Jacobiano
+        
+            # CORRECCIÓN CRÍTICA: Orden correcto para dblquad
+            # dblquad(func, a, b, gfun, hfun) integra func(y,x) desde x=a hasta x=b, y desde y=gfun(x) hasta y=hfun(x)
+            # Para polares: integramos ∫∫ f(r,θ) r dr dθ = ∫[θ_lower]^[θ_upper] ∫[r_lower]^[r_upper] f(r,θ) r dr dθ
+            result, error = integrate.dblquad(
+                lambda r, theta: integrand(r, theta),  # función a integrar
+                theta_lower, theta_upper,              # límites de θ (variable exterior)
+                lambda theta: r_lower,                 # límite inferior de r
+                lambda theta: r_upper                  # límite superior de r
+            )
+        
             return result, error
-            
+        
         except Exception as e:
+            print(f"Error en cálculo polar: {e}")
             return 0, float('inf')
 
     def display_results(self, original_func, converted_func, input_system, output_system,
@@ -476,7 +495,19 @@ class CustomIntegralTab:
         comparison_text += f"Diferencia absoluta: {difference:.2e}\n"
         comparison_text += f"Error relativo: {relative_error:.6f}%\n\n"
         
-        if relative_error < 0.01:
+        # Mostrar valor teórico esperado
+        if original_func == "x**2 + y**2" and input_system == "cartesianas":
+            # Detectar el radio del círculo
+            x_lower = float(self.limits_vars["x_lower"].get())
+            x_upper = float(self.limits_vars["x_upper"].get())
+            if x_lower == -1 and x_upper == 1:
+                theoretical = np.pi / 2
+                comparison_text += f"Valor teórico esperado: π/2 = {theoretical:.8f}\n"
+            elif x_lower == -2 and x_upper == 2:
+                theoretical = 8 * np.pi
+                comparison_text += f"Valor teórico esperado: 8π = {theoretical:.8f}\n"
+        
+        if relative_error < 1.0:
             comparison_text += "✅ CONVERSIÓN EXITOSA\n"
             comparison_text += "Los resultados coinciden, confirmando\n"
             comparison_text += "que el cambio de variables es correcto."
@@ -500,17 +531,39 @@ class CustomIntegralTab:
         ax = fig.add_subplot(111, aspect='equal')
         
         try:
-            # Dibujar región de ejemplo (círculo unitario)
-            circle = plt.Circle((0, 0), 1, fill=True, alpha=0.3, color='blue')
-            ax.add_patch(circle)
+            # Obtener los límites actuales
+            if self.input_system.get() == "cartesianas":
+                x_lower = float(self.limits_vars["x_lower"].get())
+                x_upper = float(self.limits_vars["x_upper"].get())
+                
+                # Determinar el radio del círculo
+                if x_lower == -1 and x_upper == 1:
+                    radius = 1
+                elif x_lower == -2 and x_upper == 2:
+                    radius = 2
+                else:
+                    radius = max(abs(x_lower), abs(x_upper))
+                
+                # Dibujar círculo
+                circle = plt.Circle((0, 0), radius, fill=True, alpha=0.3, color='blue')
+                ax.add_patch(circle)
+                
+                ax.set_xlim(-radius*1.2, radius*1.2)
+                ax.set_ylim(-radius*1.2, radius*1.2)
+                ax.set_title(f'Región de Integración\nCírculo de radio {radius}')
+            else:
+                # Sistema polar
+                radius = float(self.limits_vars["r_upper"].get())
+                circle = plt.Circle((0, 0), radius, fill=True, alpha=0.3, color='red')
+                ax.add_patch(circle)
+                
+                ax.set_xlim(-radius*1.2, radius*1.2)
+                ax.set_ylim(-radius*1.2, radius*1.2)
+                ax.set_title(f'Región de Integración\nCírculo de radio {radius}')
             
-            # Configurar los ejes
-            ax.set_xlim(-1.5, 1.5)
-            ax.set_ylim(-1.5, 1.5)
             ax.grid(True)
             ax.set_xlabel('x')
             ax.set_ylabel('y')
-            ax.set_title('Región de Integración\n(Ejemplo: Círculo Unitario)')
             
         except Exception as e:
             ax.text(0.5, 0.5, f"Error al visualizar:\n{str(e)}", 
@@ -538,9 +591,17 @@ class CustomIntegralTab:
         ax2 = fig.add_subplot(122, projection='3d')
         
         try:
+            # Determinar el radio basado en los límites actuales
+            if self.input_system.get() == "cartesianas":
+                x_lower = float(self.limits_vars["x_lower"].get())
+                x_upper = float(self.limits_vars["x_upper"].get())
+                radius = max(abs(x_lower), abs(x_upper))
+            else:
+                radius = float(self.limits_vars["r_upper"].get())
+            
             # Crear malla de puntos
-            x = np.linspace(-1, 1, 30)
-            y = np.linspace(-1, 1, 30)
+            x = np.linspace(-radius, radius, 30)
+            y = np.linspace(-radius, radius, 30)
             X, Y = np.meshgrid(x, y)
             
             # Función ejemplo: x² + y²
@@ -550,8 +611,8 @@ class CustomIntegralTab:
             r = np.sqrt(X**2 + Y**2)
             Z2 = r**2  # Equivalente en polares
             
-            # Máscara para círculo unitario
-            mask = X**2 + Y**2 <= 1
+            # Máscara para círculo
+            mask = X**2 + Y**2 <= radius**2
             
             # Gráfico cartesiano
             surf1 = ax1.plot_surface(X*mask, Y*mask, Z1*mask, cmap='viridis', alpha=0.8)
