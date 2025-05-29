@@ -14,7 +14,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(
 from utils.custom_integral import parse_expression, evaluate_double_integral, get_integration_limits
 
 class CustomIntegralTab:
-    """Pestaña para resolver integrales dobles personalizadas"""
+    """Pestaña para resolver integrales dobles personalizadas con conversión entre sistemas"""
 
     def __init__(self, notebook):
         """Inicializa la pestaña de integrales personalizadas"""
@@ -22,7 +22,7 @@ class CustomIntegralTab:
         notebook.add(self.frame, text="Integrales Personalizadas")
         
         # Título
-        title_label = ttk.Label(self.frame, text="Resolución de Integrales Dobles Personalizadas", 
+        title_label = ttk.Label(self.frame, text="Conversión Automática entre Sistemas de Coordenadas", 
                                font=("Arial", 16, "bold"))
         title_label.pack(pady=20)
         
@@ -34,13 +34,13 @@ class CustomIntegralTab:
         controls_frame = ttk.Frame(main_frame)
         controls_frame.pack(side=tk.LEFT, fill=tk.Y, padx=10, pady=10, expand=False)
         
-        # Selector de sistema de coordenadas
-        ttk.Label(controls_frame, text="Sistema de coordenadas:").grid(row=0, column=0, padx=5, pady=5, sticky=tk.W)
-        self.coord_system = tk.StringVar(value="cartesianas")
-        coord_combo = ttk.Combobox(controls_frame, textvariable=self.coord_system, 
+        # Selector de sistema de coordenadas de entrada
+        ttk.Label(controls_frame, text="Sistema de entrada:").grid(row=0, column=0, padx=5, pady=5, sticky=tk.W)
+        self.input_system = tk.StringVar(value="cartesianas")
+        coord_combo = ttk.Combobox(controls_frame, textvariable=self.input_system, 
                                   values=["cartesianas", "polares"])
         coord_combo.grid(row=0, column=1, padx=5, pady=5, sticky=tk.W)
-        coord_combo.bind("<<ComboboxSelected>>", self.update_integral_form)
+        coord_combo.bind("<<ComboboxSelected>>", self.update_input_system)
         
         # Marco para la función a integrar
         function_frame = ttk.LabelFrame(controls_frame, text="Función a integrar")
@@ -56,9 +56,8 @@ class CustomIntegralTab:
         
         # Ejemplos de funciones
         ttk.Label(function_frame, text="Ejemplos:").grid(row=1, column=0, padx=5, pady=5, sticky=tk.W)
-        examples_text = "x**2 + y**2\nexp(-(x**2 + y**2))\nsin(x)*cos(y)"
-        examples_label = ttk.Label(function_frame, text=examples_text, justify=tk.LEFT)
-        examples_label.grid(row=1, column=1, padx=5, pady=5, sticky=tk.W)
+        self.examples_label = ttk.Label(function_frame, text="x**2 + y**2\nexp(-(x**2 + y**2))\nlog(x**2 + y**2 + 1)", justify=tk.LEFT)
+        self.examples_label.grid(row=1, column=1, padx=5, pady=5, sticky=tk.W)
         
         # Marco para los límites de integración
         limits_frame = ttk.LabelFrame(controls_frame, text="Límites de integración")
@@ -70,17 +69,38 @@ class CustomIntegralTab:
         # Crear campos para los límites según el sistema de coordenadas
         self.create_limits_fields(limits_frame)
         
-        # Botón para calcular
-        calculate_button = ttk.Button(controls_frame, text="Calcular Integral", command=self.calculate_custom_integral)
+        # Botón para calcular y convertir
+        calculate_button = ttk.Button(controls_frame, text="Calcular y Convertir", command=self.calculate_and_convert)
         calculate_button.grid(row=3, column=0, columnspan=2, padx=5, pady=10)
         
         # Marco para resultados
-        self.integral_results_frame = ttk.LabelFrame(controls_frame, text="Resultados")
-        self.integral_results_frame.grid(row=4, column=0, columnspan=2, padx=5, pady=5, sticky=tk.W+tk.E+tk.N+tk.S)
+        self.results_frame = ttk.LabelFrame(controls_frame, text="Resultados de Conversión")
+        self.results_frame.grid(row=4, column=0, columnspan=2, padx=5, pady=5, sticky=tk.W+tk.E+tk.N+tk.S)
         
-        # Etiqueta para resultados
-        self.integral_result_label = ttk.Label(self.integral_results_frame, text="", font=("Arial", 11), wraplength=350)
-        self.integral_result_label.pack(padx=10, pady=10, fill=tk.BOTH, expand=True)
+        # Crear notebook para resultados
+        self.results_notebook = ttk.Notebook(self.results_frame)
+        self.results_notebook.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+        
+        # Pestaña para sistema original
+        self.original_frame = ttk.Frame(self.results_notebook)
+        self.results_notebook.add(self.original_frame, text="Sistema Original")
+        
+        self.original_result_label = ttk.Label(self.original_frame, text="", font=("Arial", 10), wraplength=350)
+        self.original_result_label.pack(padx=10, pady=10, fill=tk.BOTH, expand=True)
+        
+        # Pestaña para sistema convertido
+        self.converted_frame = ttk.Frame(self.results_notebook)
+        self.results_notebook.add(self.converted_frame, text="Sistema Convertido")
+        
+        self.converted_result_label = ttk.Label(self.converted_frame, text="", font=("Arial", 10), wraplength=350)
+        self.converted_result_label.pack(padx=10, pady=10, fill=tk.BOTH, expand=True)
+        
+        # Pestaña para comparación
+        self.comparison_frame = ttk.Frame(self.results_notebook)
+        self.results_notebook.add(self.comparison_frame, text="Comparación")
+        
+        self.comparison_result_label = ttk.Label(self.comparison_frame, text="", font=("Arial", 10), wraplength=350)
+        self.comparison_result_label.pack(padx=10, pady=10, fill=tk.BOTH, expand=True)
         
         # Marco para la visualización (derecha)
         visualization_frame = ttk.Frame(main_frame)
@@ -92,20 +112,15 @@ class CustomIntegralTab:
         
         # Pestaña para la región de integración
         self.region_frame = ttk.Frame(viz_notebook)
-        viz_notebook.add(self.region_frame, text="Región de integración")
+        viz_notebook.add(self.region_frame, text="Región")
         
-        # Pestaña para la función
-        self.function_viz_frame = ttk.Frame(viz_notebook)
-        viz_notebook.add(self.function_viz_frame, text="Función")
-        
-        # Pestaña para el integrando
-        self.integrand_frame = ttk.Frame(viz_notebook)
-        viz_notebook.add(self.integrand_frame, text="Integrando")
+        # Pestaña para comparación de funciones
+        self.function_comparison_frame = ttk.Frame(viz_notebook)
+        viz_notebook.add(self.function_comparison_frame, text="Comparación de Funciones")
         
         # Crear figuras iniciales
         self.create_region_figure()
-        self.create_function_figure()
-        self.create_integrand_figure()
+        self.create_function_comparison_figure()
 
     def create_limits_fields(self, parent_frame):
         """Crea los campos para los límites de integración según el sistema de coordenadas"""
@@ -113,7 +128,7 @@ class CustomIntegralTab:
         for widget in parent_frame.winfo_children():
             widget.destroy()
         
-        coord_system = self.coord_system.get()
+        coord_system = self.input_system.get()
         
         if coord_system == "cartesianas":
             # Límites para x
@@ -131,33 +146,15 @@ class CustomIntegralTab:
             ttk.Label(parent_frame, text="Límite inferior de y:").grid(row=2, column=0, padx=5, pady=5, sticky=tk.W)
             self.limits_vars["y_lower"] = ttk.Entry(parent_frame, width=10)
             self.limits_vars["y_lower"].grid(row=2, column=1, padx=5, pady=5, sticky=tk.W)
-            self.limits_vars["y_lower"].insert(0, "-1")
+            self.limits_vars["y_lower"].insert(0, "-sqrt(1-x**2)")
             
             ttk.Label(parent_frame, text="Límite superior de y:").grid(row=3, column=0, padx=5, pady=5, sticky=tk.W)
             self.limits_vars["y_upper"] = ttk.Entry(parent_frame, width=10)
             self.limits_vars["y_upper"].grid(row=3, column=1, padx=5, pady=5, sticky=tk.W)
-            self.limits_vars["y_upper"].insert(0, "1")
+            self.limits_vars["y_upper"].insert(0, "sqrt(1-x**2)")
             
-            # Opción para límites variables
-            self.variable_limits = tk.BooleanVar(value=False)
-            variable_check = ttk.Checkbutton(parent_frame, text="Límites variables", variable=self.variable_limits,
-                                           command=self.toggle_variable_limits)
-            variable_check.grid(row=4, column=0, columnspan=2, padx=5, pady=5, sticky=tk.W)
-            
-            # Marco para límites variables (inicialmente oculto)
-            self.variable_limits_frame = ttk.Frame(parent_frame)
-            self.variable_limits_frame.grid(row=5, column=0, columnspan=2, padx=5, pady=5, sticky=tk.W+tk.E)
-            self.variable_limits_frame.grid_remove()  # Ocultar inicialmente
-            
-            ttk.Label(self.variable_limits_frame, text="y inferior = f(x):").grid(row=0, column=0, padx=5, pady=5, sticky=tk.W)
-            self.limits_vars["y_lower_expr"] = ttk.Entry(self.variable_limits_frame, width=20)
-            self.limits_vars["y_lower_expr"].grid(row=0, column=1, padx=5, pady=5, sticky=tk.W+tk.E)
-            self.limits_vars["y_lower_expr"].insert(0, "-sqrt(1-x**2)")
-            
-            ttk.Label(self.variable_limits_frame, text="y superior = g(x):").grid(row=1, column=0, padx=5, pady=5, sticky=tk.W)
-            self.limits_vars["y_upper_expr"] = ttk.Entry(self.variable_limits_frame, width=20)
-            self.limits_vars["y_upper_expr"].grid(row=1, column=1, padx=5, pady=5, sticky=tk.W+tk.E)
-            self.limits_vars["y_upper_expr"].insert(0, "sqrt(1-x**2)")
+            # Actualizar ejemplos
+            self.examples_label.config(text="x**2 + y**2\nexp(-(x**2 + y**2))\nlog(x**2 + y**2 + 1)")
             
         elif coord_system == "polares":
             # Límites para r
@@ -182,120 +179,315 @@ class CustomIntegralTab:
             self.limits_vars["theta_upper"].grid(row=3, column=1, padx=5, pady=5, sticky=tk.W)
             self.limits_vars["theta_upper"].insert(0, "2*pi")
             
-            # Opción para límites variables
-            self.variable_limits = tk.BooleanVar(value=False)
-            variable_check = ttk.Checkbutton(parent_frame, text="Límites variables", variable=self.variable_limits,
-                                           command=self.toggle_variable_limits)
-            variable_check.grid(row=4, column=0, columnspan=2, padx=5, pady=5, sticky=tk.W)
-            
-            # Marco para límites variables (inicialmente oculto)
-            self.variable_limits_frame = ttk.Frame(parent_frame)
-            self.variable_limits_frame.grid(row=5, column=0, columnspan=2, padx=5, pady=5, sticky=tk.W+tk.E)
-            self.variable_limits_frame.grid_remove()  # Ocultar inicialmente
-            
-            ttk.Label(self.variable_limits_frame, text="r superior = f(θ):").grid(row=0, column=0, padx=5, pady=5, sticky=tk.W)
-            self.limits_vars["r_upper_expr"] = ttk.Entry(self.variable_limits_frame, width=20)
-            self.limits_vars["r_upper_expr"].grid(row=0, column=1, padx=5, pady=5, sticky=tk.W+tk.E)
-            self.limits_vars["r_upper_expr"].insert(0, "1 + cos(theta)")
+            # Actualizar ejemplos
+            self.examples_label.config(text="r**2\nr*cos(theta)\nlog(r**2 + 1)")
 
-    def toggle_variable_limits(self):
-        """Muestra u oculta los campos para límites variables"""
-        if self.variable_limits.get():
-            self.variable_limits_frame.grid()
-        else:
-            self.variable_limits_frame.grid_remove()
-
-    def update_integral_form(self, event=None):
-        """Actualiza el formulario de la integral cuando cambia el sistema de coordenadas"""
-        coord_system = self.coord_system.get()
+    def update_input_system(self, event=None):
+        """Actualiza el formulario cuando cambia el sistema de coordenadas de entrada"""
+        coord_system = self.input_system.get()
         
         # Actualizar etiqueta de la función
         if coord_system == "cartesianas":
             self.function_label.config(text="f(x,y) =")
+            # Cambiar función de ejemplo
+            self.function_entry.delete(0, tk.END)
+            self.function_entry.insert(0, "x**2 + y**2")
         else:
             self.function_label.config(text="f(r,θ) =")
+            # Cambiar función de ejemplo
+            self.function_entry.delete(0, tk.END)
+            self.function_entry.insert(0, "r**2")
         
         # Actualizar campos de límites
         if hasattr(self, 'limits_vars') and self.limits_vars:
             parent_frame = next(iter(self.limits_vars.values())).master
             self.create_limits_fields(parent_frame)
-        
-        # Actualizar figuras
-        self.create_region_figure()
-        self.create_function_figure()
-        self.create_integrand_figure()
 
-    def calculate_custom_integral(self):
-        """Calcula la integral doble personalizada"""
+    def convert_function_cartesian_to_polar(self, func_str):
+        """Convierte una función de coordenadas cartesianas a polares"""
         try:
-            # Obtener la función y los límites
-            func_str = self.function_entry.get()
-            coord_system = self.coord_system.get()
+            # Reemplazar x e y por sus equivalentes en polares
+            converted = func_str.replace('x', '(r*cos(theta))')
+            converted = converted.replace('y', '(r*sin(theta))')
             
-            # Calcular la integral
-            result, error, symbolic_result = evaluate_double_integral(
-                func_str, 
-                coord_system, 
-                get_integration_limits(coord_system, self.limits_vars, self.variable_limits.get()),
-                self.variable_limits.get()
-            )
+            # Simplificar expresiones comunes
+            converted = converted.replace('(r*cos(theta))**2 + (r*sin(theta))**2', 'r**2')
+            converted = converted.replace('((r*cos(theta))**2 + (r*sin(theta))**2)', 'r**2')
+            
+            return converted
+        except:
+            return f"({func_str}) convertida a polares"
+
+    def convert_function_polar_to_cartesian(self, func_str):
+        """Convierte una función de coordenadas polares a cartesianas"""
+        try:
+            # Reemplazar r y theta por sus equivalentes en cartesianas
+            converted = func_str.replace('r', 'sqrt(x**2 + y**2)')
+            converted = converted.replace('theta', 'atan2(y, x)')
+            converted = converted.replace('cos(atan2(y, x))', 'x/sqrt(x**2 + y**2)')
+            converted = converted.replace('sin(atan2(y, x))', 'y/sqrt(x**2 + y**2)')
+            
+            return converted
+        except:
+            return f"({func_str}) convertida a cartesianas"
+
+    def convert_limits_cartesian_to_polar(self, limits):
+        """Convierte límites de cartesianas a polares para regiones circulares"""
+        # Para simplificar, asumimos región circular
+        try:
+            x_lower = float(limits["x_lower"].get())
+            x_upper = float(limits["x_upper"].get())
+            y_lower_str = limits["y_lower"].get()
+            y_upper_str = limits["y_upper"].get()
+            
+            # Detectar si es un círculo
+            if "sqrt(1-x**2)" in y_lower_str and "sqrt(1-x**2)" in y_upper_str:
+                # Es un círculo unitario
+                return {
+                    "r_lower": "0",
+                    "r_upper": "1",
+                    "theta_lower": "0",
+                    "theta_upper": "2*pi"
+                }
+            else:
+                # Región rectangular -> sector
+                r_max = max(abs(x_lower), abs(x_upper), 2)  # Estimación
+                return {
+                    "r_lower": "0",
+                    "r_upper": str(r_max),
+                    "theta_lower": "0",
+                    "theta_upper": "2*pi"
+                }
+        except:
+            return {
+                "r_lower": "0",
+                "r_upper": "2",
+                "theta_lower": "0",
+                "theta_upper": "2*pi"
+            }
+
+    def convert_limits_polar_to_cartesian(self, limits):
+        """Convierte límites de polares a cartesianas"""
+        try:
+            r_upper = float(limits["r_upper"].get())
+            
+            # Para círculo completo
+            return {
+                "x_lower": str(-r_upper),
+                "x_upper": str(r_upper),
+                "y_lower": f"-sqrt({r_upper}**2-x**2)",
+                "y_upper": f"sqrt({r_upper}**2-x**2)"
+            }
+        except:
+            return {
+                "x_lower": "-1",
+                "x_upper": "1",
+                "y_lower": "-sqrt(1-x**2)",
+                "y_upper": "sqrt(1-x**2)"
+            }
+
+    def calculate_and_convert(self):
+        """Calcula la integral en el sistema original y la convierte al otro sistema"""
+        try:
+            # Obtener la función y los límites originales
+            func_str = self.function_entry.get()
+            input_system = self.input_system.get()
+            
+            # Determinar el sistema de salida
+            output_system = "polares" if input_system == "cartesianas" else "cartesianas"
+            
+            # Calcular en el sistema original
+            if input_system == "cartesianas":
+                # Calcular en cartesianas
+                original_result, original_error = self.calculate_cartesian_integral(func_str)
+                
+                # Convertir a polares
+                converted_func = self.convert_function_cartesian_to_polar(func_str)
+                converted_limits = self.convert_limits_cartesian_to_polar(self.limits_vars)
+                converted_result, converted_error = self.calculate_polar_integral(converted_func, converted_limits)
+                
+            else:
+                # Calcular en polares
+                original_result, original_error = self.calculate_polar_integral(func_str, self.limits_vars)
+                
+                # Convertir a cartesianas
+                converted_func = self.convert_function_polar_to_cartesian(func_str)
+                converted_limits = self.convert_limits_polar_to_cartesian(self.limits_vars)
+                converted_result, converted_error = self.calculate_cartesian_integral_with_limits(converted_func, converted_limits)
             
             # Mostrar resultados
-            if coord_system == "cartesianas":
-                if self.variable_limits.get():
-                    x_lower = float(self.limits_vars["x_lower"].get())
-                    x_upper = float(self.limits_vars["x_upper"].get())
-                    y_lower_expr = self.limits_vars["y_lower_expr"].get()
-                    y_upper_expr = self.limits_vars["y_upper_expr"].get()
-                    
-                    result_text = f"Integral de {func_str} sobre la región:\n"
-                    result_text += f"{x_lower} ≤ x ≤ {x_upper}\n"
-                    result_text += f"{y_lower_expr} ≤ y ≤ {y_upper_expr}\n\n"
-                else:
-                    x_lower = float(self.limits_vars["x_lower"].get())
-                    x_upper = float(self.limits_vars["x_upper"].get())
-                    y_lower = float(self.limits_vars["y_lower"].get())
-                    y_upper = float(self.limits_vars["y_upper"].get())
-                    
-                    result_text = f"Integral de {func_str} sobre el rectángulo:\n"
-                    result_text += f"{x_lower} ≤ x ≤ {x_upper}\n"
-                    result_text += f"{y_lower} ≤ y ≤ {y_upper}\n\n"
-            else:  # polares
-                r_lower = float(self.limits_vars["r_lower"].get())
-                theta_lower_str = self.limits_vars["theta_lower"].get()
-                theta_upper_str = self.limits_vars["theta_upper"].get()
-                
-                if self.variable_limits.get():
-                    r_upper_expr = self.limits_vars["r_upper_expr"].get()
-                    
-                    result_text = f"Integral de {func_str} en coordenadas polares sobre la región:\n"
-                    result_text += f"{r_lower} ≤ r ≤ {r_upper_expr}\n"
-                    result_text += f"{theta_lower_str} ≤ θ ≤ {theta_upper_str}\n\n"
-                else:
-                    r_upper = float(self.limits_vars["r_upper"].get())
-                    
-                    result_text = f"Integral de {func_str} en coordenadas polares sobre la región:\n"
-                    result_text += f"{r_lower} ≤ r ≤ {r_upper}\n"
-                    result_text += f"{theta_lower_str} ≤ θ ≤ {theta_upper_str}\n\n"
-            
-            result_text += f"Resultado numérico: {result:.8f}\n"
-            result_text += f"Error estimado: {error:.8e}\n"
-            
-            if symbolic_result is not None:
-                symbolic_value = float(symbolic_result.evalf())
-                symbolic_latex = sp.latex(symbolic_result)
-                result_text += f"\nResultado simbólico: {symbolic_value:.8f}\n"
-                result_text += f"Expresión: {symbolic_latex}"
-            
-            self.integral_result_label.config(text=result_text)
+            self.display_results(func_str, converted_func, input_system, output_system, 
+                               original_result, original_error, converted_result, converted_error)
             
             # Actualizar figuras
             self.create_region_figure()
-            self.create_function_figure()
-            self.create_integrand_figure()
+            self.create_function_comparison_figure()
             
         except Exception as e:
-            self.integral_result_label.config(text=f"Error: {str(e)}\n\nVerifique que la función y los límites estén correctamente definidos.")
+            self.original_result_label.config(text=f"Error: {str(e)}")
+            self.converted_result_label.config(text=f"Error: {str(e)}")
+            self.comparison_result_label.config(text=f"Error: {str(e)}")
+
+    def calculate_cartesian_integral(self, func_str):
+        """Calcula integral en coordenadas cartesianas"""
+        try:
+            x_lower = float(self.limits_vars["x_lower"].get())
+            x_upper = float(self.limits_vars["x_upper"].get())
+            y_lower_str = self.limits_vars["y_lower"].get()
+            y_upper_str = self.limits_vars["y_upper"].get()
+            
+            def integrand(y, x):
+                # Reemplazar variables en la función
+                expr = func_str.replace('x', str(x)).replace('y', str(y))
+                # Manejar funciones matemáticas comunes
+                expr = expr.replace('sin', 'np.sin').replace('cos', 'np.cos')
+                expr = expr.replace('tan', 'np.tan').replace('exp', 'np.exp')
+                expr = expr.replace('sqrt', 'np.sqrt').replace('log', 'np.log')
+                expr = expr.replace('pi', 'np.pi').replace('e', 'np.e')
+                return eval(expr)
+            
+            def y_lower_func(x):
+                expr = y_lower_str.replace('x', str(x))
+                expr = expr.replace('sqrt', 'np.sqrt').replace('pi', 'np.pi')
+                expr = expr.replace('log', 'np.log').replace('e', 'np.e')
+                return eval(expr)
+            
+            def y_upper_func(x):
+                expr = y_upper_str.replace('x', str(x))
+                expr = expr.replace('sqrt', 'np.sqrt').replace('pi', 'np.pi')
+                expr = expr.replace('log', 'np.log').replace('e', 'np.e')
+                return eval(expr)
+            
+            result, error = integrate.dblquad(integrand, x_lower, x_upper, y_lower_func, y_upper_func)
+            return result, error
+            
+        except Exception as e:
+            return 0, float('inf')
+
+    def calculate_cartesian_integral_with_limits(self, func_str, limits):
+        """Calcula integral en cartesianas con límites dados"""
+        try:
+            x_lower = float(limits["x_lower"])
+            x_upper = float(limits["x_upper"])
+            y_lower_str = limits["y_lower"]
+            y_upper_str = limits["y_upper"]
+            
+            def integrand(y, x):
+                expr = func_str.replace('x', str(x)).replace('y', str(y))
+                expr = expr.replace('sin', 'np.sin').replace('cos', 'np.cos')
+                expr = expr.replace('tan', 'np.tan').replace('exp', 'np.exp')
+                expr = expr.replace('sqrt', 'np.sqrt').replace('log', 'np.log')
+                expr = expr.replace('pi', 'np.pi').replace('e', 'np.e')
+                expr = expr.replace('atan2', 'np.arctan2')
+                return eval(expr)
+            
+            def y_lower_func(x):
+                expr = y_lower_str.replace('x', str(x))
+                expr = expr.replace('sqrt', 'np.sqrt').replace('pi', 'np.pi')
+                expr = expr.replace('log', 'np.log').replace('e', 'np.e')
+                return eval(expr)
+            
+            def y_upper_func(x):
+                expr = y_upper_str.replace('x', str(x))
+                expr = expr.replace('sqrt', 'np.sqrt').replace('pi', 'np.pi')
+                expr = expr.replace('log', 'np.log').replace('e', 'np.e')
+                return eval(expr)
+            
+            result, error = integrate.dblquad(integrand, x_lower, x_upper, y_lower_func, y_upper_func)
+            return result, error
+            
+        except Exception as e:
+            return 0, float('inf')
+
+    def calculate_polar_integral(self, func_str, limits):
+        """Calcula integral en coordenadas polares"""
+        try:
+            r_lower = float(limits["r_lower"].get() if hasattr(limits["r_lower"], 'get') else limits["r_lower"])
+            r_upper = float(limits["r_upper"].get() if hasattr(limits["r_upper"], 'get') else limits["r_upper"])
+            theta_lower_str = limits["theta_lower"].get() if hasattr(limits["theta_lower"], 'get') else limits["theta_lower"]
+            theta_upper_str = limits["theta_upper"].get() if hasattr(limits["theta_upper"], 'get') else limits["theta_upper"]
+            
+            theta_lower = eval(theta_lower_str.replace('pi', 'np.pi'))
+            theta_upper = eval(theta_upper_str.replace('pi', 'np.pi'))
+            
+            def integrand(theta, r):
+                expr = func_str.replace('r', str(r)).replace('theta', str(theta))
+                expr = expr.replace('sin', 'np.sin').replace('cos', 'np.cos')
+                expr = expr.replace('tan', 'np.tan').replace('exp', 'np.exp')
+                expr = expr.replace('sqrt', 'np.sqrt').replace('log', 'np.log')
+                expr = expr.replace('pi', 'np.pi').replace('e', 'np.e')
+                return eval(expr) * r  # Jacobiano
+            
+            result, error = integrate.dblquad(integrand, theta_lower, theta_upper, 
+                                            lambda theta: r_lower, lambda theta: r_upper)
+            return result, error
+            
+        except Exception as e:
+            return 0, float('inf')
+
+    def display_results(self, original_func, converted_func, input_system, output_system,
+                       original_result, original_error, converted_result, converted_error):
+        """Muestra los resultados de la conversión"""
+        
+        # Resultado original
+        original_text = f"SISTEMA ORIGINAL: {input_system.upper()}\n\n"
+        original_text += f"Función: {original_func}\n\n"
+        if input_system == "cartesianas":
+            original_text += f"Límites:\n"
+            original_text += f"x: {self.limits_vars['x_lower'].get()} ≤ x ≤ {self.limits_vars['x_upper'].get()}\n"
+            original_text += f"y: {self.limits_vars['y_lower'].get()} ≤ y ≤ {self.limits_vars['y_upper'].get()}\n\n"
+        else:
+            original_text += f"Límites:\n"
+            original_text += f"r: {self.limits_vars['r_lower'].get()} ≤ r ≤ {self.limits_vars['r_upper'].get()}\n"
+            original_text += f"θ: {self.limits_vars['theta_lower'].get()} ≤ θ ≤ {self.limits_vars['theta_upper'].get()}\n\n"
+        
+        original_text += f"Resultado: {original_result:.8f}\n"
+        original_text += f"Error estimado: {original_error:.2e}"
+        
+        self.original_result_label.config(text=original_text)
+        
+        # Resultado convertido
+        converted_text = f"SISTEMA CONVERTIDO: {output_system.upper()}\n\n"
+        converted_text += f"Función convertida:\n{converted_func}\n\n"
+        
+        if output_system == "polares":
+            converted_text += f"Transformación aplicada:\n"
+            converted_text += f"x = r·cos(θ)\n"
+            converted_text += f"y = r·sin(θ)\n"
+            converted_text += f"dA = r dr dθ (Jacobiano = r)\n\n"
+        else:
+            converted_text += f"Transformación aplicada:\n"
+            converted_text += f"r = √(x² + y²)\n"
+            converted_text += f"θ = arctan(y/x)\n"
+            converted_text += f"dA = dx dy\n\n"
+        
+        converted_text += f"Resultado: {converted_result:.8f}\n"
+        converted_text += f"Error estimado: {converted_error:.2e}"
+        
+        self.converted_result_label.config(text=converted_text)
+        
+        # Comparación
+        difference = abs(original_result - converted_result)
+        relative_error = difference / abs(original_result) * 100 if original_result != 0 else 0
+        
+        comparison_text = f"VERIFICACIÓN DEL CAMBIO DE VARIABLES\n\n"
+        comparison_text += f"Resultado en {input_system}: {original_result:.8f}\n"
+        comparison_text += f"Resultado en {output_system}: {converted_result:.8f}\n\n"
+        comparison_text += f"Diferencia absoluta: {difference:.2e}\n"
+        comparison_text += f"Error relativo: {relative_error:.6f}%\n\n"
+        
+        if relative_error < 0.01:
+            comparison_text += "✅ CONVERSIÓN EXITOSA\n"
+            comparison_text += "Los resultados coinciden, confirmando\n"
+            comparison_text += "que el cambio de variables es correcto."
+        else:
+            comparison_text += "⚠️ DIFERENCIA SIGNIFICATIVA\n"
+            comparison_text += "Puede deberse a:\n"
+            comparison_text += "- Aproximaciones numéricas\n"
+            comparison_text += "- Límites de integración diferentes\n"
+            comparison_text += "- Complejidad de la conversión"
+        
+        self.comparison_result_label.config(text=comparison_text)
 
     def create_region_figure(self):
         """Crea la figura para visualizar la región de integración"""
@@ -308,136 +500,20 @@ class CustomIntegralTab:
         ax = fig.add_subplot(111, aspect='equal')
         
         try:
-            # Obtener el sistema de coordenadas y los límites
-            coord_system = self.coord_system.get()
+            # Dibujar región de ejemplo (círculo unitario)
+            circle = plt.Circle((0, 0), 1, fill=True, alpha=0.3, color='blue')
+            ax.add_patch(circle)
             
-            if coord_system == "cartesianas":
-                if self.variable_limits.get():
-                    x_lower = float(self.limits_vars["x_lower"].get())
-                    x_upper = float(self.limits_vars["x_upper"].get())
-                    y_lower_expr = self.limits_vars["y_lower_expr"].get()
-                    y_upper_expr = self.limits_vars["y_upper_expr"].get()
-                    
-                    # Crear una malla de puntos en x
-                    x = np.linspace(x_lower, x_upper, 100)
-                    
-                    # Evaluar las expresiones para los límites de y
-                    y_lower = eval(y_lower_expr.replace('x', 'x_val') for x_val in x)
-                    y_upper = eval(y_upper_expr.replace('x', 'x_val') for x_val in x)
-                    
-                    # Dibujar la región
-                    ax.fill_between(x, y_lower, y_upper, alpha=0.3)
-                    ax.plot(x, y_lower, 'b-')
-                    ax.plot(x, y_upper, 'b-')
-                    
-                    # Configurar los ejes
-                    ax.set_xlim(x_lower - 0.5, x_upper + 0.5)
-                    y_min = min(np.min(y_lower), -1)
-                    y_max = max(np.max(y_upper), 1)
-                    ax.set_ylim(y_min - 0.5, y_max + 0.5)
-                    
-                    # Título
-                    ax.set_title(f"Región: {x_lower} ≤ x ≤ {x_upper}, {y_lower_expr} ≤ y ≤ {y_upper_expr}")
-                    
-                else:
-                    x_lower = float(self.limits_vars["x_lower"].get())
-                    x_upper = float(self.limits_vars["x_upper"].get())
-                    y_lower = float(self.limits_vars["y_lower"].get())
-                    y_upper = float(self.limits_vars["y_upper"].get())
-                    
-                    # Dibujar el rectángulo
-                    rect = plt.Rectangle((x_lower, y_lower), x_upper - x_lower, y_upper - y_lower, 
-                                        fill=True, alpha=0.3)
-                    ax.add_patch(rect)
-                    
-                    # Configurar los ejes
-                    ax.set_xlim(x_lower - 0.5, x_upper + 0.5)
-                    ax.set_ylim(y_lower - 0.5, y_upper + 0.5)
-                    
-                    # Título
-                    ax.set_title(f"Región: {x_lower} ≤ x ≤ {x_upper}, {y_lower} ≤ y ≤ {y_upper}")
-                
-                # Etiquetas de los ejes
-                ax.set_xlabel('x')
-                ax.set_ylabel('y')
-                
-            else:  # polares
-                r_lower = float(self.limits_vars["r_lower"].get())
-                theta_lower_str = self.limits_vars["theta_lower"].get()
-                theta_upper_str = self.limits_vars["theta_upper"].get()
-                
-                # Convertir expresiones de límites a valores numéricos
-                theta_lower = eval(theta_lower_str.replace('pi', 'np.pi'))
-                theta_upper = eval(theta_upper_str.replace('pi', 'np.pi'))
-                
-                if self.variable_limits.get():
-                    r_upper_expr = self.limits_vars["r_upper_expr"].get()
-                    
-                    # Crear una malla de puntos en theta
-                    theta = np.linspace(theta_lower, theta_upper, 100)
-                    
-                    # Evaluar la expresión para el límite superior de r
-                    r_upper = np.array([eval(r_upper_expr.replace('theta', 'theta_val')) for theta_val in theta])
-                    
-                    # Convertir a coordenadas cartesianas
-                    x_lower = r_lower * np.cos(theta)
-                    y_lower = r_lower * np.sin(theta)
-                    x_upper = r_upper * np.cos(theta)
-                    y_upper = r_upper * np.sin(theta)
-                    
-                    # Dibujar la región
-                    ax.fill(x_upper, y_upper, alpha=0.3)
-                    ax.plot(x_upper, y_upper, 'b-')
-                    
-                    # Configurar los ejes
-                    r_max = np.max(r_upper)
-                    ax.set_xlim(-r_max - 0.5, r_max + 0.5)
-                    ax.set_ylim(-r_max - 0.5, r_max + 0.5)
-                    
-                    # Título
-                    ax.set_title(f"Región: {r_lower} ≤ r ≤ {r_upper_expr}, {theta_lower_str} ≤ θ ≤ {theta_upper_str}")
-                    
-                else:
-                    r_upper = float(self.limits_vars["r_upper"].get())
-                    
-                    # Dibujar el sector circular
-                    theta = np.linspace(theta_lower, theta_upper, 100)
-                    x_outer = r_upper * np.cos(theta)
-                    y_outer = r_upper * np.sin(theta)
-                    
-                    if r_lower > 0:
-                        x_inner = r_lower * np.cos(theta)
-                        y_inner = r_lower * np.sin(theta)
-                        
-                        # Crear un polígono para el sector anular
-                        x = np.concatenate([x_outer, x_inner[::-1], [x_outer[0]]])
-                        y = np.concatenate([y_outer, y_inner[::-1], [y_outer[0]]])
-                        ax.fill(x, y, alpha=0.3)
-                        ax.plot(x_outer, y_outer, 'b-')
-                        ax.plot(x_inner, y_inner, 'b-')
-                    else:
-                        # Crear un polígono para el sector circular
-                        x = np.concatenate([x_outer, [0, x_outer[0]]])
-                        y = np.concatenate([y_outer, [0, y_outer[0]]])
-                        ax.fill(x, y, alpha=0.3)
-                        ax.plot(x_outer, y_outer, 'b-')
-                    
-                    # Configurar los ejes
-                    ax.set_xlim(-r_upper - 0.5, r_upper + 0.5)
-                    ax.set_ylim(-r_upper - 0.5, r_upper + 0.5)
-                    
-                    # Título
-                    ax.set_title(f"Región: {r_lower} ≤ r ≤ {r_upper}, {theta_lower_str} ≤ θ ≤ {theta_upper_str}")
-                
-                # Etiquetas de los ejes
-                ax.set_xlabel('x')
-                ax.set_ylabel('y')
-            
-            # Agregar una cuadrícula
+            # Configurar los ejes
+            ax.set_xlim(-1.5, 1.5)
+            ax.set_ylim(-1.5, 1.5)
             ax.grid(True)
+            ax.set_xlabel('x')
+            ax.set_ylabel('y')
+            ax.set_title('Región de Integración\n(Ejemplo: Círculo Unitario)')
             
         except Exception as e:
-            ax.text(0.5, 0.5, f"Error al visualizar la región:\n{str(e)}", 
+            ax.text(0.5, 0.5, f"Error al visualizar:\n{str(e)}", 
                    ha='center', va='center', transform=ax.transAxes)
         
         # Ajustar la figura
@@ -447,275 +523,58 @@ class CustomIntegralTab:
         canvas = FigureCanvasTkAgg(fig, master=self.region_frame)
         canvas.draw()
         canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
-        
-        # Agregar la barra de herramientas
-        toolbar = NavigationToolbar2Tk(canvas, self.region_frame)
-        toolbar.update()
 
-    def create_function_figure(self):
-        """Crea la figura para visualizar la función a integrar"""
+    def create_function_comparison_figure(self):
+        """Crea la figura para comparar las funciones en ambos sistemas"""
         # Limpiar el marco
-        for widget in self.function_viz_frame.winfo_children():
+        for widget in self.function_comparison_frame.winfo_children():
             widget.destroy()
         
         # Crear una nueva figura
-        fig = plt.Figure(figsize=(6, 6))
-        ax = fig.add_subplot(111, projection='3d')
+        fig = plt.Figure(figsize=(12, 5))
+        
+        # Gráfico en coordenadas cartesianas
+        ax1 = fig.add_subplot(121, projection='3d')
+        ax2 = fig.add_subplot(122, projection='3d')
         
         try:
-            # Obtener la función y el sistema de coordenadas
-            func_str = self.function_entry.get()
-            coord_system = self.coord_system.get()
+            # Crear malla de puntos
+            x = np.linspace(-1, 1, 30)
+            y = np.linspace(-1, 1, 30)
+            X, Y = np.meshgrid(x, y)
             
-            # Crear una malla de puntos
-            if coord_system == "cartesianas":
-                # Obtener los límites
-                if self.variable_limits.get():
-                    x_lower = float(self.limits_vars["x_lower"].get())
-                    x_upper = float(self.limits_vars["x_upper"].get())
-                    # Usar límites fijos para la visualización
-                    y_lower = -2
-                    y_upper = 2
-                else:
-                    x_lower = float(self.limits_vars["x_lower"].get())
-                    x_upper = float(self.limits_vars["x_upper"].get())
-                    y_lower = float(self.limits_vars["y_lower"].get())
-                    y_upper = float(self.limits_vars["y_upper"].get())
-                
-                # Crear una malla de puntos
-                x = np.linspace(x_lower - 0.5, x_upper + 0.5, 30)
-                y = np.linspace(y_lower - 0.5, y_upper + 0.5, 30)
-                X, Y = np.meshgrid(x, y)
-                
-                # Evaluar la función
-                Z = np.zeros_like(X)
-                for i in range(X.shape[0]):
-                    for j in range(X.shape[1]):
-                        try:
-                            # Reemplazar x e y por sus valores
-                            expr = func_str.replace('x', str(X[i, j])).replace('y', str(Y[i, j]))
-                            # Reemplazar funciones matemáticas
-                            expr = expr.replace('sin', 'np.sin').replace('cos', 'np.cos')
-                            expr = expr.replace('tan', 'np.tan').replace('exp', 'np.exp')
-                            expr = expr.replace('log', 'np.log').replace('sqrt', 'np.sqrt')
-                            expr = expr.replace('pi', 'np.pi').replace('e', 'np.e')
-                            # Evaluar la expresión
-                            Z[i, j] = eval(expr)
-                        except:
-                            Z[i, j] = np.nan
-                
-                # Dibujar la superficie
-                surf = ax.plot_surface(X, Y, Z, cmap='viridis', alpha=0.8)
-                
-                # Título y etiquetas
-                ax.set_title(f"Función: f(x,y) = {func_str}")
-                ax.set_xlabel('x')
-                ax.set_ylabel('y')
-                ax.set_zlabel('f(x,y)')
-                
-            else:  # polares
-                # Obtener los límites
-                r_lower = float(self.limits_vars["r_lower"].get())
-                theta_lower_str = self.limits_vars["theta_lower"].get()
-                theta_upper_str = self.limits_vars["theta_upper"].get()
-                
-                # Convertir expresiones de límites a valores numéricos
-                theta_lower = eval(theta_lower_str.replace('pi', 'np.pi'))
-                theta_upper = eval(theta_upper_str.replace('pi', 'np.pi'))
-                
-                if self.variable_limits.get():
-                    # Usar un límite fijo para la visualización
-                    r_upper = 3
-                else:
-                    r_upper = float(self.limits_vars["r_upper"].get())
-                
-                # Crear una malla de puntos en coordenadas polares
-                r = np.linspace(0, r_upper + 0.5, 30)
-                theta = np.linspace(0, 2*np.pi, 30)
-                R, Theta = np.meshgrid(r, theta)
-                
-                # Convertir a coordenadas cartesianas
-                X = R * np.cos(Theta)
-                Y = R * np.sin(Theta)
-                
-                # Evaluar la función
-                Z = np.zeros_like(X)
-                for i in range(X.shape[0]):
-                    for j in range(X.shape[1]):
-                        try:
-                            # Reemplazar r y theta por sus valores
-                            expr = func_str.replace('r', str(R[i, j])).replace('theta', str(Theta[i, j]))
-                            # Reemplazar funciones matemáticas
-                            expr = expr.replace('sin', 'np.sin').replace('cos', 'np.cos')
-                            expr = expr.replace('tan', 'np.tan').replace('exp', 'np.exp')
-                            expr = expr.replace('log', 'np.log').replace('sqrt', 'np.sqrt')
-                            expr = expr.replace('pi', 'np.pi').replace('e', 'np.e')
-                            # Evaluar la expresión
-                            Z[i, j] = eval(expr)
-                        except:
-                            Z[i, j] = np.nan
-                
-                # Dibujar la superficie
-                surf = ax.plot_surface(X, Y, Z, cmap='viridis', alpha=0.8)
-                
-                # Título y etiquetas
-                ax.set_title(f"Función: f(r,θ) = {func_str}")
-                ax.set_xlabel('x')
-                ax.set_ylabel('y')
-                ax.set_zlabel('f(r,θ)')
+            # Función ejemplo: x² + y²
+            Z1 = X**2 + Y**2
             
-            # Agregar una barra de colores
-            fig.colorbar(surf, ax=ax, shrink=0.5, aspect=5)
+            # Convertir a coordenadas polares
+            r = np.sqrt(X**2 + Y**2)
+            Z2 = r**2  # Equivalente en polares
+            
+            # Máscara para círculo unitario
+            mask = X**2 + Y**2 <= 1
+            
+            # Gráfico cartesiano
+            surf1 = ax1.plot_surface(X*mask, Y*mask, Z1*mask, cmap='viridis', alpha=0.8)
+            ax1.set_xlabel('x')
+            ax1.set_ylabel('y')
+            ax1.set_zlabel('f(x,y)')
+            ax1.set_title('Coordenadas Cartesianas\nf(x,y) = x² + y²')
+            
+            # Gráfico polar
+            surf2 = ax2.plot_surface(X*mask, Y*mask, Z2*mask, cmap='plasma', alpha=0.8)
+            ax2.set_xlabel('x')
+            ax2.set_ylabel('y')
+            ax2.set_zlabel('f(r,θ)')
+            ax2.set_title('Coordenadas Polares\nf(r,θ) = r²')
             
         except Exception as e:
-            ax.text2D(0.5, 0.5, f"Error al visualizar la función:\n{str(e)}", 
-                     ha='center', va='center', transform=ax.transAxes)
+            ax1.text2D(0.5, 0.5, f"Error: {str(e)}", ha='center', va='center', transform=ax1.transAxes)
+            ax2.text2D(0.5, 0.5, f"Error: {str(e)}", ha='center', va='center', transform=ax2.transAxes)
         
         # Ajustar la figura
         fig.tight_layout()
         
         # Agregar la figura al marco
-        canvas = FigureCanvasTkAgg(fig, master=self.function_viz_frame)
+        canvas = FigureCanvasTkAgg(fig, master=self.function_comparison_frame)
         canvas.draw()
         canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
-        
-        # Agregar la barra de herramientas
-        toolbar = NavigationToolbar2Tk(canvas, self.function_viz_frame)
-        toolbar.update()
-
-    def create_integrand_figure(self):
-        """Crea la figura para visualizar el integrando (incluyendo el jacobiano)"""
-        # Limpiar el marco
-        for widget in self.integrand_frame.winfo_children():
-            widget.destroy()
-        
-        # Crear una nueva figura
-        fig = plt.Figure(figsize=(6, 6))
-        ax = fig.add_subplot(111, projection='3d')
-        
-        try:
-            # Obtener la función y el sistema de coordenadas
-            func_str = self.function_entry.get()
-            coord_system = self.coord_system.get()
-            
-            # Crear una malla de puntos
-            if coord_system == "cartesianas":
-                # El integrando es simplemente la función
-                integrand_str = func_str
-                
-                # Obtener los límites
-                if self.variable_limits.get():
-                    x_lower = float(self.limits_vars["x_lower"].get())
-                    x_upper = float(self.limits_vars["x_upper"].get())
-                    # Usar límites fijos para la visualización
-                    y_lower = -2
-                    y_upper = 2
-                else:
-                    x_lower = float(self.limits_vars["x_lower"].get())
-                    x_upper = float(self.limits_vars["x_upper"].get())
-                    y_lower = float(self.limits_vars["y_lower"].get())
-                    y_upper = float(self.limits_vars["y_upper"].get())
-                
-                # Crear una malla de puntos
-                x = np.linspace(x_lower - 0.5, x_upper + 0.5, 30)
-                y = np.linspace(y_lower - 0.5, y_upper + 0.5, 30)
-                X, Y = np.meshgrid(x, y)
-                
-                # Evaluar el integrando
-                Z = np.zeros_like(X)
-                for i in range(X.shape[0]):
-                    for j in range(X.shape[1]):
-                        try:
-                            # Reemplazar x e y por sus valores
-                            expr = integrand_str.replace('x', str(X[i, j])).replace('y', str(Y[i, j]))
-                            # Reemplazar funciones matemáticas
-                            expr = expr.replace('sin', 'np.sin').replace('cos', 'np.cos')
-                            expr = expr.replace('tan', 'np.tan').replace('exp', 'np.exp')
-                            expr = expr.replace('log', 'np.log').replace('sqrt', 'np.sqrt')
-                            expr = expr.replace('pi', 'np.pi').replace('e', 'np.e')
-                            # Evaluar la expresión
-                            Z[i, j] = eval(expr)
-                        except:
-                            Z[i, j] = np.nan
-                
-                # Dibujar la superficie
-                surf = ax.plot_surface(X, Y, Z, cmap='viridis', alpha=0.8)
-                
-                # Título y etiquetas
-                ax.set_title(f"Integrando: {integrand_str}")
-                ax.set_xlabel('x')
-                ax.set_ylabel('y')
-                ax.set_zlabel('f(x,y)')
-                
-            else:  # polares
-                # El integrando incluye el jacobiano r
-                integrand_str = f"({func_str}) * r"
-                
-                # Obtener los límites
-                r_lower = float(self.limits_vars["r_lower"].get())
-                theta_lower_str = self.limits_vars["theta_lower"].get()
-                theta_upper_str = self.limits_vars["theta_upper"].get()
-                
-                # Convertir expresiones de límites a valores numéricos
-                theta_lower = eval(theta_lower_str.replace('pi', 'np.pi'))
-                theta_upper = eval(theta_upper_str.replace('pi', 'np.pi'))
-                
-                if self.variable_limits.get():
-                    # Usar un límite fijo para la visualización
-                    r_upper = 3
-                else:
-                    r_upper = float(self.limits_vars["r_upper"].get())
-                
-                # Crear una malla de puntos en coordenadas polares
-                r = np.linspace(0, r_upper + 0.5, 30)
-                theta = np.linspace(0, 2*np.pi, 30)
-                R, Theta = np.meshgrid(r, theta)
-                
-                # Convertir a coordenadas cartesianas
-                X = R * np.cos(Theta)
-                Y = R * np.sin(Theta)
-                
-                # Evaluar el integrando
-                Z = np.zeros_like(X)
-                for i in range(X.shape[0]):
-                    for j in range(X.shape[1]):
-                        try:
-                            # Reemplazar r y theta por sus valores
-                            expr = func_str.replace('r', str(R[i, j])).replace('theta', str(Theta[i, j]))
-                            # Reemplazar funciones matemáticas
-                            expr = expr.replace('sin', 'np.sin').replace('cos', 'np.cos')
-                            expr = expr.replace('tan', 'np.tan').replace('exp', 'np.exp')
-                            expr = expr.replace('log', 'np.log').replace('sqrt', 'np.sqrt')
-                            expr = expr.replace('pi', 'np.pi').replace('e', 'np.e')
-                            # Evaluar la expresión y multiplicar por el jacobiano
-                            Z[i, j] = eval(expr) * R[i, j]
-                        except:
-                            Z[i, j] = np.nan
-                
-                # Dibujar la superficie
-                surf = ax.plot_surface(X, Y, Z, cmap='viridis', alpha=0.8)
-                
-                # Título y etiquetas
-                ax.set_title(f"Integrando: {integrand_str}")
-                ax.set_xlabel('x')
-                ax.set_ylabel('y')
-                ax.set_zlabel('f(r,θ)·r')
-            
-            # Agregar una barra de colores
-            fig.colorbar(surf, ax=ax, shrink=0.5, aspect=5)
-            
-        except Exception as e:
-            ax.text2D(0.5, 0.5, f"Error al visualizar el integrando:\n{str(e)}", 
-                     ha='center', va='center', transform=ax.transAxes)
-        
-        # Ajustar la figura
-        fig.tight_layout()
-        
-        # Agregar la figura al marco
-        canvas = FigureCanvasTkAgg(fig, master=self.integrand_frame)
-        canvas.draw()
-        canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
-        
-        # Agregar la barra de herramientas
-        toolbar = NavigationToolbar2Tk(canvas, self.integrand_frame)
-        toolbar.update()
